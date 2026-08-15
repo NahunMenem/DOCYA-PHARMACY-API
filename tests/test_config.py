@@ -29,6 +29,23 @@ class PharmacyTestModeConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "requires simulated payment mode"):
             settings.validate_runtime_secrets()
 
+    def test_production_accepts_legacy_core_jwt_with_strong_internal_key(self):
+        settings = self._settings(
+            environment="production",
+            jwt_secret="1234567890abcdef",
+            internal_api_key="a" * 32,
+        )
+        settings.validate_runtime_secrets()
+
+    def test_production_rejects_weak_internal_key(self):
+        settings = self._settings(
+            environment="production",
+            jwt_secret="1234567890abcdef",
+            internal_api_key="weak-key",
+        )
+        with self.assertRaisesRegex(RuntimeError, "INTERNAL_API_KEY"):
+            settings.validate_runtime_secrets()
+
 
 if __name__ == "__main__":
     unittest.main()

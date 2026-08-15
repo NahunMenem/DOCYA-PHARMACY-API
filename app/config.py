@@ -57,8 +57,16 @@ class Settings(BaseSettings):
                 "PHARMACY_AUTO_ACTIVATE_TEST_REGISTRATIONS requires simulated payment mode"
             )
         if self.environment == "production":
-            if len(self.jwt_secret) < 32 or len(self.internal_api_key) < 32:
-                raise RuntimeError("Production secrets must contain at least 32 characters")
+            # JWT_SECRET debe coincidir con el backend principal. DocYa mantiene
+            # temporalmente una clave heredada de 16 caracteres para no cerrar
+            # las sesiones activas; la credencial nueva entre servicios si debe
+            # tener entropia suficiente.
+            if len(self.jwt_secret) < 16:
+                raise RuntimeError("Production JWT_SECRET must contain at least 16 characters")
+            if len(self.internal_api_key) < 32:
+                raise RuntimeError(
+                    "Production INTERNAL_API_KEY must contain at least 32 characters"
+                )
 
 
 @lru_cache
