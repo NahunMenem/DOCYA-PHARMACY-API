@@ -8,7 +8,11 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.core_client import CoreServiceError, list_patient_prescriptions
+from app.core_client import (
+    CoreServiceError,
+    get_prescription_for_pharmacy,
+    list_patient_prescriptions,
+)
 from app.database import close_pool, connection
 from app.repository import (
     accept_quote,
@@ -17,6 +21,7 @@ from app.repository import (
     create_order,
     create_quote,
     get_order,
+    get_pharmacy_order_prescription_reference,
     list_pharmacy_assignments,
     list_patient_orders,
     set_branch_availability,
@@ -314,6 +319,34 @@ def pharmacy_me(actor: Annotated[Actor, Depends(require_pharmacy)]):
         raise HTTPException(status_code=404, detail="Farmacia inexistente")
     profile["payment_mode"] = get_settings().pharmacy_payment_mode
     return profile
+
+
+@app.get("/v1/pharmacy/orders/{order_id}/prescription", tags=["pharmacy"])
+def pharmacy_order_prescription(
+    order_id: UUID,
+    actor: Annotated[Actor, Depends(require_pharmacy)],
+):
+    try:
+        with connection() as conn:
+            reference = get_pharmacy_order_prescription_reference(
+                conn,
+                UUID(actor.pharmacy_id),
+                order_id,
+            )
+        source, raw_id = reference.split(":", 1)
+        if source not in {"recetario", "consulta"} or not raw_id.isdigit():
+            raise ValueError("invalid_prescription_reference")
+        return get_prescription_for_pharmacy(source, int(raw_id))
+    except (LookupError, PermissionError, ValueError) as exc:
+        raise _translate_domain_error(exc) from exc
+    except CoreServiceError as exc:
+        logger.warning("Could not load prescription document from DocYa Core: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo cargar la receta de DocYa",
+        ) from exc
+    except psycopg2.Error as exc:
+        raise HTTPException(status_code=503, detail="No se pudo validar el pedido") from exc
 
 
 @app.patch("/v1/pharmacy/branches/{branch_id}/availability", tags=["pharmacy"])

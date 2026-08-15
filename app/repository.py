@@ -279,6 +279,32 @@ def list_pharmacy_assignments(conn, pharmacy_id: UUID) -> list[dict]:
         return [dict(row) for row in cur.fetchall()]
 
 
+def get_pharmacy_order_prescription_reference(
+    conn,
+    pharmacy_id: UUID,
+    order_id: UUID,
+) -> str:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT op.external_prescription_id
+            FROM pharmacy.medication_orders o
+            JOIN pharmacy.pharmacy_branches b
+              ON b.id = o.assigned_pharmacy_branch_id
+            JOIN pharmacy.order_prescriptions op ON op.order_id = o.id
+            WHERE o.id = %s AND b.pharmacy_id = %s
+            """,
+            (str(order_id), str(pharmacy_id)),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise PermissionError("order_not_assigned_to_pharmacy")
+        reference = str(row["external_prescription_id"] or "")
+        if ":" not in reference:
+            raise ValueError("invalid_prescription_reference")
+        return reference
+
+
 def create_quote(conn, order_id: UUID, pharmacy_id: UUID, payload: CreateQuoteInput) -> dict:
     quote_id = uuid4()
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
