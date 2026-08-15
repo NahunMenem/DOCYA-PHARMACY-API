@@ -1,0 +1,2 @@
+"""DocYa Pharmacy API."""
+
